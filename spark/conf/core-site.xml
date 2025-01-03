@@ -1,0 +1,22 @@
+<configuration>
+  <property>
+    <name>fs.azure.account.auth.type.${AZURE_STORAGE_ACCOUNT}.dfs.core.windows.net</name>
+    <value>OAuth</value>
+  </property>
+  <property>
+    <name>fs.azure.account.oauth.provider.type.${AZURE_STORAGE_ACCOUNT}.dfs.core.windows.net</name>
+    <value>org.apache.hadoop.fs.azurebfs.oauth2.ClientCredsTokenProvider</value>
+  </property>
+  <property>
+    <name>fs.azure.account.oauth2.client.id</name>
+    <value>${ADLS_CLIENT_ID}</value>
+  </property>
+  <property>
+    <name>fs.azure.account.oauth2.client.secret</name>
+    <value>${ADLS_CLIENT_SECRET}</value>
+  </property>
+  <property>
+    <name>fs.azure.account.oauth2.client.endpoint</name>
+    <value>https://login.microsoftonline.com/${ADLS_TENANT_ID}/oauth2/token</value>
+  </property>
+</configuration>
