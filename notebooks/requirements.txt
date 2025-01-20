@@ -1,0 +1,10 @@
+python-dotenv
+azure-storage-blob
+azure-storage-file-datalake
+azure-identity
+pyspark
+pyspark[sql]
+sqlalchemy
+pyodbc
+msal
+bs4
