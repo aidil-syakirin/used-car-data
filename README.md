@@ -46,7 +46,10 @@ The current ELT pipeline is manually triggered, as my local machine is no longer
 
 1. **Expand Data Sources**:
    - Include 1-2 additional data sources to reduce data skew.
-   - Current data is overly concentrated in Klang Valley (~75%), limiting representativeness.
+   - Current data is overly concentrated in Klang Valley (~50%), limiting representativeness.
+  
+   ![image](https://github.com/user-attachments/assets/cadcdb02-0a88-4583-b5a5-66a9edaed3e2)
+
 
 2. **Enhance Dashboard Visualizations**:
    - Provide more meaningful and actionable visualizations.
