@@ -132,6 +132,9 @@ def make_heatmap(input_df, selected_car_model, input_y, input_x, input_color, in
 col = st.columns((1.5, 4.5, 2), gap='medium')
 
 with col[1]:
+    st.markdown(f'### Car Model Data: {selected_car_model}')
+    st.markdown(f'### Price vs {selected_params} heatmap')
+
     heatmap = make_heatmap(df_selected_car_model, selected_car_model, selected_params, 'price', 'count', selected_color_theme)
     st.altair_chart(heatmap)
 
