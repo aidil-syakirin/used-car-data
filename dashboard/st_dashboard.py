@@ -8,7 +8,7 @@ import io
 
 st.set_page_config(
     page_title="Used Car Data in MY",
-    page_icon="C:/Users/asyak/Downloads/myvi kuning.svg",
+    page_icon="https://raw.githubusercontent.com/aidil-syakirin/used-car-data/refs/heads/main/dashboard/myvi%20kuning.svg",
     layout="wide",
     initial_sidebar_state="expanded")
 
