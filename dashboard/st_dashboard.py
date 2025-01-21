@@ -16,20 +16,31 @@ alt.themes.enable("dark")
 
 #fetching the view file from azure blob storage
 container_name = st.secrets["AZURE_CONTAINER_NAME"]
+account_name = st.secrets["AZURE_STORAGE_ACCOUNT_NAME"]
 
-adls_conn_string = st.secrets["AZURE_DATA_LAKE_CONNECTION_STRING"]
-if adls_conn_string is None:
-    raise ValueError("ADLS connection string not found")
-        
-# Create a BlobServiceClient
-service_client = BlobServiceClient.from_connection_string(adls_conn_string)
+try:
+    # Create credential object using service principal
+    credential = ClientSecretCredential(
+        tenant_id=st.secrets["AZURE_TENANT_ID"] ,
+        client_id=st.secrets["AZURE_CLIENT_ID"] ,
+        client_secret=st.secrets["AZURE_CLIENT_SECRET"]
+    )
 
-# Get container client
-container_client = service_client.get_container_client(container_name)
+    # Create the BlobServiceClient using service principal authentication
+    service_client = BlobServiceClient(
+        account_url=f"https://{account_name}.blob.core.windows.net",
+        credential=credential
+    )
 
-# Replace 'your_file.parquet' with your actual parquet file name
-blob_name = 'used-car-data-view.parquet'
-blob_client = container_client.get_blob_client(blob_name)
+    # Get container client
+    container_client = service_client.get_container_client(container_name)
+
+    # Replace 'your_file.parquet' with your actual parquet file name
+    blob_name = 'used-car-data-view.parquet'
+    blob_client = container_client.get_blob_client(blob_name)
+except Exception as e:
+    st.error(f"Authentication Error: {str(e)}")
+    st.error(f"Tenant ID being used: {st.secrets['AZURE_TENANT_ID']}")
 
 # Download the blob content
 downloaded_blob = blob_client.download_blob()
