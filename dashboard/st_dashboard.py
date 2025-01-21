@@ -41,6 +41,10 @@ try:
 except Exception as e:
     st.error(f"Authentication Error: {str(e)}")
     st.error(f"Tenant ID being used: {st.secrets['AZURE_TENANT_ID']}")
+    st.error(f"Client ID being used: {st.secrets['AZURE_CLIENT_ID']}")
+    st.error(f"Storage Account: {account_name}")
+    st.error(f"Container: {container_name}")
+    raise  # This will show the full error traceback
 
 # Download the blob content
 downloaded_blob = blob_client.download_blob()
