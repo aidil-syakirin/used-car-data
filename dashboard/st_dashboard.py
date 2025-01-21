@@ -39,12 +39,6 @@ try:
     blob_name = 'used-car-data-view.parquet'
     blob_client = container_client.get_blob_client(blob_name)
     
-    # Add these diagnostic checks
-    st.write("Checking blob exists...")
-    exists = blob_client.exists()
-    st.write(f"Blob exists: {exists}")
-    
-    st.write("Attempting to download blob...")
     # Download the blob content
     downloaded_blob = blob_client.download_blob()
 except Exception as e:
