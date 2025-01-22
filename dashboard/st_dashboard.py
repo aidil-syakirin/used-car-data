@@ -127,18 +127,26 @@ def make_heatmap(input_df, selected_car_model, input_y, input_x, input_color, in
     count_matrix = df_with_bins.groupby([input_y, 'price_range']).size().reset_index(name='count')
     
     heatmap = alt.Chart(count_matrix).mark_rect().encode(
-            y=alt.Y(f'{input_y}:O', axis=alt.Axis(title=input_y, titleFontSize=18, titlePadding=15, titleFontWeight=900, labelAngle=0)),
-            x=alt.X('price_range:O', axis=alt.Axis(title="Price Range (RM)", titleFontSize=18, titlePadding=15, titleFontWeight=900)),
+            y=alt.Y(f'{input_y}:O', axis=alt.Axis(title=input_y, titleFontSize=14, titlePadding=10, titleFontWeight=900, labelAngle=0)),
+            x=alt.X('price_range:O', 
+                   axis=alt.Axis(
+                       title="Price Range (RM)", 
+                       titleFontSize=14, 
+                       titlePadding=10, 
+                       titleFontWeight=900,
+                       labelAngle=45  # Angle the labels to save horizontal space
+                   )),
             color=alt.Color('count:Q',
-                             legend=alt.Legend(title="Number of Cars"),
-                             scale=alt.Scale(scheme=input_color_theme)),
+                          legend=alt.Legend(title="Number of Cars"),
+                          scale=alt.Scale(scheme=input_color_theme)),
             stroke=alt.value('black'),
             strokeWidth=alt.value(0.25),
-        ).properties(width=900
+        ).properties(
+            width='container'  # Make chart responsive to container width
         ).configure_axis(
-        labelFontSize=12,
-        titleFontSize=12
-        ) 
+            labelFontSize=10,  # Slightly smaller font for mobile
+            titleFontSize=12
+        )
     return heatmap
 
 screen_width = get_screen_width()
@@ -157,9 +165,10 @@ with main_container:
 
     heatmap = make_heatmap(df_selected_car_model, selected_car_model, selected_params, 'price', 'count', selected_color_theme)
     if screen_width < 768:
+        chart_width = min(screen_width - 40, 900)  # Increase padding for mobile
         heatmap = heatmap.properties(
             width=chart_width,
-            height=min(chart_width * 0.7, 400)  # Adjust height proportionally
+            height=300  # Fixed height for mobile
         )
     st.altair_chart(heatmap, use_container_width=True)
 
@@ -167,7 +176,9 @@ with main_container:
     st.markdown('#### Price Difference by State and Manufacturing Year')
     
     price_diff_chart = alt.Chart(avg_price_by_state_year).mark_rect().encode(
-        x=alt.X('year:O', title='Manufacturing Year'),
+        x=alt.X('year:O', 
+                title='Manufacturing Year',
+                axis=alt.Axis(labelAngle=45)),  # Angle the labels
         y=alt.Y('state:O', title='State'),
         color=alt.Color('price_diff:Q',
                        scale=alt.Scale(scheme=selected_color_theme, domainMid=0),
@@ -181,11 +192,11 @@ with main_container:
             alt.Tooltip('std:Q', title='Standard Deviation', format=',.0f')
         ]
     ).properties(
-        width=chart_width,
-        height=min(chart_width * 0.5, 400),  # Adjust height proportionally
+        width='container',
+        height=300 if screen_width < 768 else 400,  # Adjust height for mobile
         title=f'Price Differences for {selected_car_model} by State and Manufacturing Year'
     ).configure_axis(
-        labelFontSize=12,
+        labelFontSize=10,  # Smaller font for mobile
         titleFontSize=12
     )
     
