@@ -92,6 +92,18 @@ with st.sidebar:
     min_sample = st.sidebar.slider('Minimum number of cars per state-year', 1, 50, 5)
     avg_price_by_state_year = avg_price_by_state_year[avg_price_by_state_year['count'] >= min_sample]
 
+def get_screen_width():
+    # Get current browser window width using JavaScript
+    screen_width = st.session_state.get('screen_width', None)
+    if screen_width is None:
+        screen_width = st.experimental_get_query_params().get('width', [1200])[0]
+        try:
+            screen_width = int(screen_width)
+        except:
+            screen_width = 1200
+        st.session_state.screen_width = screen_width
+    return screen_width
+
 def make_heatmap(input_df, selected_car_model, input_y, input_x, input_color, input_color_theme):
     # Create a copy and ensure price is numeric
     df_with_bins = input_df.copy()
@@ -129,16 +141,29 @@ def make_heatmap(input_df, selected_car_model, input_y, input_x, input_color, in
         ) 
     return heatmap
 
-col = st.columns((1.5, 4.5, 2), gap='medium')
+screen_width = get_screen_width()
+if screen_width < 768:  # Mobile breakpoint
+    col = st.columns((1), gap='medium')
+    chart_width = min(screen_width - 20, 900)  # Account for padding
+    main_container = col[0]
+else:
+    col = st.columns((1.5, 4.5, 2), gap='medium')
+    chart_width = 900
+    main_container = col[1]
 
-with col[1]:
+with main_container:
     st.markdown(f'### Car Model Data: {selected_car_model}')
     st.markdown(f'### Price vs {selected_params} heatmap')
 
     heatmap = make_heatmap(df_selected_car_model, selected_car_model, selected_params, 'price', 'count', selected_color_theme)
-    st.altair_chart(heatmap)
+    if screen_width < 768:
+        heatmap = heatmap.properties(
+            width=chart_width,
+            height=min(chart_width * 0.7, 400)  # Adjust height proportionally
+        )
+    st.altair_chart(heatmap, use_container_width=True)
 
-    # Add price difference visualization
+    # Update the price difference chart
     st.markdown('#### Price Difference by State and Manufacturing Year')
     
     price_diff_chart = alt.Chart(avg_price_by_state_year).mark_rect().encode(
@@ -156,17 +181,18 @@ with col[1]:
             alt.Tooltip('std:Q', title='Standard Deviation', format=',.0f')
         ]
     ).properties(
-        width=900,
-        height=400,
+        width=chart_width,
+        height=min(chart_width * 0.5, 400),  # Adjust height proportionally
         title=f'Price Differences for {selected_car_model} by State and Manufacturing Year'
     ).configure_axis(
         labelFontSize=12,
         titleFontSize=12
     )
     
-    st.altair_chart(price_diff_chart)
+    st.altair_chart(price_diff_chart, use_container_width=True)
 
-with col[2]:
+# If on mobile, move the state listings below the charts
+if screen_width < 768:
     st.markdown('#### Top Listings by State')
 
     st.dataframe(df_selected_car_model_sorted,

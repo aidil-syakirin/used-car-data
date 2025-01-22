@@ -119,7 +119,7 @@ def main():
     for x in base_url:
         all_json_data = []
         model_name = get_model_name(x)
-        page_list = page_number(1,133,x)
+        page_list = page_number(1,15,x)
         # print(page_list)
         try:
             for index,item in enumerate(page_list):
