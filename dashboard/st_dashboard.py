@@ -179,12 +179,12 @@ col = st.columns((1, 4.5, 2), gap='medium')
 
 with col[1]:
 
+    st.markdown(f'### Car Model Data: {selected_car_model}')
     # Add price difference visualization
     st.markdown('#### Price Difference by State and Manufacturing Year')
     price_diff_chart = make_price_diff_chart()
     st.altair_chart(price_diff_chart)
 
-    st.markdown(f'### Car Model Data: {selected_car_model}')
     st.markdown(f'### Price vs {selected_params} heatmap')
 
     heatmap = make_heatmap(df_selected_car_model, selected_car_model, selected_params, 'price', 'count', selected_color_theme)
