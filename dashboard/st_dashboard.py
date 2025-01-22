@@ -53,6 +53,9 @@ except Exception as e:
 df = pd.read_parquet(io.BytesIO(downloaded_blob.readall()))
 df = df[['car_model','year','price','variant','mileage','state','location']]
 
+# Convert the 'year' column to numeric (if not already)
+df['year'] = pd.to_numeric(df['year'], errors='coerce')
+
 #preprocessing the value of myvi to make it uniform
 df['car_model'] = df['car_model'].replace('myvi', 'Myvi')
 df['price'] = pd.to_numeric(df['price'], errors='coerce') 
@@ -66,7 +69,23 @@ with st.sidebar:
     selected_car_model = st.selectbox('Select a car model', car_model_list, index=len(car_model_list)-1)
     df_selected_car_model = df[df.car_model == selected_car_model]
 
-    params_list = ['year', 'state', 'variant']
+    # Create a list of years for the selectboxes
+    year_options = list(range(int(df['year'].max()), int(df['year'].min()) - 1, -1))
+
+    # Add selectbox for selecting the minimum year
+    min_year = st.selectbox('Select Minimum Year', year_options, index=len(year_options) - 1)
+
+    # Add selectbox for selecting the maximum year, starting from the highest year
+    max_year = st.selectbox('Select Maximum Year', year_options, index=0)
+
+    # Ensure that the maximum year is greater than or equal to the minimum year
+    if max_year < min_year:
+        st.error("Maximum year must be greater than or equal to Minimum year.")
+    else:
+        # Filter the DataFrame based on the selected year range
+        df_selected_car_model = df_selected_car_model[(df_selected_car_model['year'] >= min_year) & (df_selected_car_model['year'] <= max_year)]
+
+    params_list = ['state', 'variant']
     selected_params = st.selectbox('Select a Y parameter', params_list)
 
     # Price analysis by state
@@ -87,7 +106,7 @@ with st.sidebar:
 
     color_theme_list = ['blues', 'cividis', 'greens', 'inferno', 'magma', 'plasma', 'reds', 'rainbow', 'turbo', 'viridis']
     selected_color_theme = st.selectbox('Select a color theme', color_theme_list)
-
+    
     # Add minimum sample size filter
     min_sample = st.sidebar.slider('Minimum number of cars per state-year', 1, 50, 5)
     avg_price_by_state_year = avg_price_by_state_year[avg_price_by_state_year['count'] >= min_sample]
@@ -129,18 +148,7 @@ def make_heatmap(input_df, selected_car_model, input_y, input_x, input_color, in
         ) 
     return heatmap
 
-col = st.columns((1.5, 4.5, 2), gap='medium')
-
-with col[1]:
-    st.markdown(f'### Car Model Data: {selected_car_model}')
-    st.markdown(f'### Price vs {selected_params} heatmap')
-
-    heatmap = make_heatmap(df_selected_car_model, selected_car_model, selected_params, 'price', 'count', selected_color_theme)
-    st.altair_chart(heatmap)
-
-    # Add price difference visualization
-    st.markdown('#### Price Difference by State and Manufacturing Year')
-    
+def make_price_diff_chart():
     price_diff_chart = alt.Chart(avg_price_by_state_year).mark_rect().encode(
         x=alt.X('year:O', title='Manufacturing Year'),
         y=alt.Y('state:O', title='State'),
@@ -163,8 +171,24 @@ with col[1]:
         labelFontSize=12,
         titleFontSize=12
     )
+    return price_diff_chart
     
+
+
+col = st.columns((1, 4.5, 2), gap='medium')
+
+with col[1]:
+
+    # Add price difference visualization
+    st.markdown('#### Price Difference by State and Manufacturing Year')
+    price_diff_chart = make_price_diff_chart()
     st.altair_chart(price_diff_chart)
+
+    st.markdown(f'### Car Model Data: {selected_car_model}')
+    st.markdown(f'### Price vs {selected_params} heatmap')
+
+    heatmap = make_heatmap(df_selected_car_model, selected_car_model, selected_params, 'price', 'count', selected_color_theme)
+    st.altair_chart(heatmap)
 
 with col[2]:
     st.markdown('#### Top Listings by State')
