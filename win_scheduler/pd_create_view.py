@@ -35,14 +35,18 @@ def create_view():
         return df
         
 # Upload to Azure Blob Storage
-load_dotenv()
-adls_connection_string = os.getenv('AZURE_DATA_LAKE_CONNECTION_STRING')
-if adls_connection_string is None:
-            raise ValueError("Connection string not found")
-blob_service_client = BlobServiceClient.from_connection_string(adls_connection_string)
-df_view = create_view()
-df_view = df_view.to_parquet("used-car-data-view.parquet", index=False)
+def main():
+    load_dotenv()
+    adls_connection_string = os.getenv('AZURE_DATA_LAKE_CONNECTION_STRING')
+    if adls_connection_string is None:
+                raise ValueError("Connection string not found")
+    blob_service_client = BlobServiceClient.from_connection_string(adls_connection_string)
+    df_view = create_view()
+    df_view = df_view.to_parquet("used-car-data-view.parquet", index=False)
 
-blob_client = blob_service_client.get_blob_client(container="used-car-data-dashboard-view", blob="used-car-data-view.parquet")
-with open("used-car-data-view.parquet", "rb") as data:
-    blob_client.upload_blob(data, overwrite=True)
+    blob_client = blob_service_client.get_blob_client(container="used-car-data-dashboard-view", blob="used-car-data-view.parquet")
+    with open("used-car-data-view.parquet", "rb") as data:
+        blob_client.upload_blob(data, overwrite=True)
+
+if __name__ == "__main__":
+    main()  

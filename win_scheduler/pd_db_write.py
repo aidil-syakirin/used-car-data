@@ -38,74 +38,76 @@ def insert_data(df):
         
         connection.commit()
 
+def main():
+    load_dotenv()
 
-load_dotenv()
+    # Get sensitive data from environment variable
+    directory_path = os.getenv('AZURE_DIRECTORY_PATH')
+    storage_account = os.getenv("AZURE_STORAGE_ACCOUNT")
+    adls_client_id = os.getenv("ADLS_CLIENT_ID")
+    adls_client_secret = os.getenv("ADLS_CLIENT_SECRET")
+    adls_tenant_id = os.getenv("ADLS_TENANT_ID")
+    conn_string_value = os.getenv('AZURE_DATA_LAKE_CONNECTION_STRING')
+    container_name = os.getenv('AZURE_CONTAINER_NAME')
 
-# Get sensitive data from environment variable
-directory_path = os.getenv('AZURE_DIRECTORY_PATH')
-storage_account = os.getenv("AZURE_STORAGE_ACCOUNT")
-adls_client_id = os.getenv("ADLS_CLIENT_ID")
-adls_client_secret = os.getenv("ADLS_CLIENT_SECRET")
-adls_tenant_id = os.getenv("ADLS_TENANT_ID")
-conn_string_value = os.getenv('AZURE_DATA_LAKE_CONNECTION_STRING')
-container_name = os.getenv('AZURE_CONTAINER_NAME')
+    # Test credentials
+    credential = ClientSecretCredential(
+        tenant_id= adls_tenant_id,
+        client_id= adls_client_id,
+        client_secret= adls_client_secret
+    )
 
-# Test credentials
-credential = ClientSecretCredential(
-    tenant_id= adls_tenant_id,
-    client_id= adls_client_id,
-    client_secret= adls_client_secret
-)
+    # Test connection
+    service_client = BlobServiceClient(
+        account_url="https://myvisekendatalake.blob.core.windows.net",
+        credential=credential
+    )
 
-# Test connection
-service_client = BlobServiceClient(
-    account_url="https://myvisekendatalake.blob.core.windows.net",
-    credential=credential
-)
+    # Get container client
+    container_client = service_client.get_container_client(container_name)
 
-# Get container client
-container_client = blob_service_client.get_container_client(container_name)
+    # List all blobs in the specified directory
+    blob_list = container_client.list_blobs(name_starts_with=directory_path)
 
-# List all blobs in the specified directory
-blob_list = container_client.list_blobs(name_starts_with=directory_path)
+    # Get list of files
+    files = [blob.name for blob in container_client.list_blobs(name_starts_with=directory_path)
+            if blob.name.lower().endswith(('.parquet'))] # filter for .parquet file only
 
-# Get list of files
-files = [blob.name for blob in container_client.list_blobs(name_starts_with=directory_path)
-         if blob.name.lower().endswith(('.csv', '.parquet'))] # filter for .csv or .parquet file only
+    for blob_name in files:
 
-for blob_name in files:
+        blob_service_client = BlobServiceClient.from_connection_string(conn_string_value)# Access the container and blob
 
-    blob_service_client = BlobServiceClient.from_connection_string(conn_string_value)# Access the container and blob
+        processing_date = pd.Timestamp.now().strftime('%Y%m%d')
+        
+        if processing_date in blob_name:
+            blob_service_client = BlobServiceClient.from_connection_string(conn_string_value)
 
-    processing_date = pd.Timestamp.now().strftime('%Y%m%d')
-    
-    if processing_date in blob_name:
-        blob_service_client = BlobServiceClient.from_connection_string(conn_string_value)
+        # Access the container and blob
+        blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_name)
 
-    # Access the container and blob
-    blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_name)
+        # Download the blob content
+        stream = blob_client.download_blob().readall()
 
-    # Download the blob content
-    stream = blob_client.download_blob().readall()
+        # Load into pandas DataFrame
+        df = pd.read_parquet(io.BytesIO(stream))
 
-    # Load into pandas DataFrame
-    df = pd.read_parquet(io.BytesIO(stream))
+        #preprocessing the raw .parquet file to fit the staging table schema
+        
+        #add new listing_image column to fit the existing schema
+        df['listing_image'] = df['image'].str[0]
+        
+        #the state column cannot be null as per schema
+        df = df[df['state'].isnull() == False]
 
-    #preprocessing the raw .parquet file to fit the staging table schema
-    
-    #add new listing_image column to fit the existing schema
-    df['listing_image'] = df['image'].str[0]
-    
-    #the state column cannot be null as per schema
-    df = df[df['state'].isnull() == False]
+        #rename model column into car_model column
+        df.rename(columns={'model': 'car_model'}, inplace=True)
+        
+        del df['seller']
 
-    #rename model column into car_model column
-    df.rename(columns={'model': 'car_model'}, inplace=True)
-    
-    del df['seller']
+        insert_data(df)
 
-    insert_data(df)
-    
+if __name__ == "__main__":
+    main()  
 
 
 
