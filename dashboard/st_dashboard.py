@@ -96,7 +96,7 @@ def get_screen_width():
     # Get current browser window width using JavaScript
     screen_width = st.session_state.get('screen_width', None)
     if screen_width is None:
-        screen_width = st.experimental_get_query_params().get('width', [1200])[0]
+        screen_width = st.query_params().get('width', [1200])[0]
         try:
             screen_width = int(screen_width)
         except:
