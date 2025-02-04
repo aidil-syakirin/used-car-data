@@ -1,3 +1,4 @@
+
 WITH dedup AS(
     SELECT 
         *, 
@@ -8,12 +9,13 @@ WITH dedup AS(
 	SELECT * FROM dedup 
 	WHERE row_num = 1
 )
+insert into dbo.prod_table
 select 
 	listing_id,
 	case when car_model = 'myvi' then 'Myvi' 
 		else car_model 
 		end dim_car_model,
-	price as fct_price,
+	cast(replace(price, ',','') as numeric) as fct_price,
 	case when installment is null 
 		then 
 			round((CAST(REPLACE(REPLACE(price, 'RM ', ''), ',', '') AS NUMERIC) 
@@ -30,6 +32,5 @@ select
 	state as dim_state,
 	url,
 	image,
-	listing_image,
 	cast (processing_date as date) as dim_processing_date
-	from cte
+	from cte 
