@@ -1,3 +1,51 @@
+-- DAILY_SINK TABLE
+CREATE TABLE daily_sink (
+    listing_id VARCHAR(20),
+    car_model VARCHAR(80),
+    price NUMERIC(18,0),
+    installment NUMERIC(18,0),
+    year INT,
+    mileage NUMERIC(18,0),
+    color VARCHAR(80),
+    location VARCHAR(80),
+    state VARCHAR(80),
+    url VARCHAR(80),
+    image NVARCHAR(MAX),
+    extracted_date DATETIME
+);
+
+-- STAGING_TABLE
+CREATE TABLE staging_table (
+    listing_id VARCHAR(20),
+    car_model VARCHAR(80),
+    price NUMERIC(18,0),
+    installment NUMERIC(18,0),
+    year INT,
+    mileage NUMERIC(18,0),
+    color VARCHAR(80),
+    location VARCHAR(80),
+    state VARCHAR(80),
+    url VARCHAR(80),
+    image NVARCHAR(MAX),
+    extracted_date DATETIME,
+    processing_date DATETIME
+);
+
+-- PROD_TABLE (Regular Table)
+CREATE TABLE prod_table (
+    listing_id VARCHAR(20) PRIMARY KEY,
+    dim_car_model VARCHAR(20),
+    fct_price NUMERIC(18,0),
+    fct_installment NUMERIC(18,0),
+    fct_year INT,
+    fct_mileage NUMERIC(18,0),
+    dim_color VARCHAR(20),
+    dim_location VARCHAR(80),
+    dim_state VARCHAR(20),
+    url VARCHAR(80),
+    dim_extracted_date DATETIME,
+    dim_processing_date DATETIME
+);
 
 -- RECENT_LISTINGS TABLE (Tracking Processed Listings)
 CREATE TABLE used_car_data.recent_listings (
