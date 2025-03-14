@@ -3,7 +3,9 @@ from datetime import datetime
 import pendulum
 import pandas as pd
 from bs4 import BeautifulSoup as bs
-from azure.storage.filedatalake import DataLakeServiceClient
+from airflow.providers.microsoft.azure.operators.adls import ADLSCreateObjectOperator
+from airflow import DAG
+from dotenv import load_dotenv
 import requests
 import json
 import time
@@ -228,9 +230,33 @@ def used_car_data_elt():
             import traceback
             print(traceback.format_exc())
 
-    # Set dependencies using function calls
-    df = extract_data()
-    load_data(df)
+        total_run_json_data.extend(all_json_data)
+    
+    if total_run_json_data:
+        df = pd.DataFrame(total_run_json_data)
+        return df.to_dict('records')  # Convert DataFrame to dict for XCom
+
+@task(task_id="prepare_and_load_data")
+def load_data(data):
+    df = pd.DataFrame(data)  # Convert dict back to DataFrame
+    parquet_buffer = io.BytesIO()
+    df.to_parquet(parquet_buffer, engine='pyarrow')
+    parquet_buffer.seek(0)
+    print("Data has been successfully scraped and saved to Parquet format")
+
+    # Create the operator directly in the DAG context
+    upload_to_adls = ADLSCreateObjectOperator(
+        task_id="upload_data_to_adls",
+        azure_data_lake_conn_id=azure_connection_id,
+        file_system_name=azure_container_name,
+        file_name=f"raw/carlist/data_{pd.Timestamp.now().strftime('%Y%m%d')}.parquet",
+        data=parquet_buffer.getvalue(),
+        replace=True,
+        dag=dag  # Add the DAG reference
+    )
+    
+    # Execute the upload
+    upload_to_adls.execute(context={})
 
 
 # Allow the DAG to be run
