@@ -117,118 +117,31 @@ def get_model_name(url):
         return 'vios'
     return 'unknown'
 
-def upload_to_datalake(parquet_buffer): 
+@task
+def extract_data():
+    base_url = ['https://www.carlist.my/cars-for-sale/perodua/myvi/malaysia?page_number=X&page_size=25&sort=modification_date_search.desc',
+                'https://www.carlist.my/cars-for-sale/honda/city/malaysia?page_number=X&page_size=25&sort=modification_date_search.desc',
+                'https://www.carlist.my/cars-for-sale/toyota/vios/malaysia?page_number=X&page_size=25&sort=modification_date_search.desc']
 
-    try:
+    total_run_json_data = []
 
-        # Load environment variables from .env file
-        load_dotenv()
-
-        container_name = os.getenv('AZURE_CONTAINER_NAME')
-        directory_path = os.getenv('AZURE_DIRECTORY_PATH')
-        connection_string = os.getenv('AZURE_DATA_LAKE_CONNECTION_STRING')
-        
-        # Get connection string and other parameters from environment variables
-        connection_string = os.getenv('AZURE_DATA_LAKE_CONNECTION_STRING')
-        if connection_string is None:
-            raise ValueError("Connection string not found")
-        
-        # Create a DataLakeServiceClient
-        service_client = DataLakeServiceClient.from_connection_string(connection_string)
-        
-        # Ensure paths don't have leading/trailing slashes
-        directory_path = directory_path.strip('/')
-        container_name = container_name.strip()
-        
-        # Get file system client (container)
-        file_system_client = service_client.get_file_system_client(file_system=container_name)
-        
-        # Get directory client
-        directory_client = file_system_client.get_directory_client(directory_path)
-        
-        # Generate a unique file name (you can customize this as needed)
-        file_name = f"data_{pd.Timestamp.now().strftime('%Y%m%d')}.parquet"
-        
-        # Debug print
-        print(f"Attempting to upload file: {file_name}")
-        
-        # Create directory if it doesn't exist (removed exist_ok parameter)
+    for x in base_url:
+        all_json_data = []
+        model_name = get_model_name(x)
+        page_list = page_number(1,1,x)
+        # print(page_list)
         try:
-            directory_client.create_directory()
+            for index,item in enumerate(page_list):
+                results = main_extraction(item)
+                if results:
+                    all_json_data.extend(results)
+                    print(f"Added {len(results)} entries from page {index + 1}")
+                else:
+                    print(f"Processed item {index + 1}: No entries found")
+
+            
         except Exception as e:
-            # Directory might already exist, continue
-            print(f"Directory might already exist: {str(e)}")
-        
-        # Get file client
-        file_client = directory_client.get_file_client(file_name)
-        
-        # Upload the parquet data from the buffer
-        file_client.upload_data(parquet_buffer.getvalue(), overwrite=True)
-        
-        print(f"File uploaded successfully to Azure Data Lake: {directory_path}/{file_name}")
-        
-    except Exception as e:
-        print(f"Error uploading to Data Lake: {str(e)}")
-        # Print full error traceback for debugging
-        import traceback
-        print(traceback.format_exc())
-
-@dag(
-    start_date=pendulum.datetime(2025,2,18),
-    schedule="5 1 * * *",
-    catchup=False,
-    max_active_runs=1
-)
-def used_car_data_elt():
-   
-    @task()
-    def extract_data():
-        
-        base_url = ['https://www.carlist.my/cars-for-sale/perodua/myvi/malaysia?page_number=X&page_size=25&sort=modification_date_search.desc', \
-                    'https://www.carlist.my/cars-for-sale/honda/city/malaysia?page_number=X&page_size=25&sort=modification_date_search.desc', \
-                    'https://www.carlist.my/cars-for-sale/toyota/vios/malaysia?page_number=X&page_size=25&sort=modification_date_search.desc' ]
-
-        total_run_json_data = []
-
-        for x in base_url:
-            all_json_data = []
-            model_name = get_model_name(x)
-            page_list = page_number(1,1,x)
-            # print(page_list)
-            try:
-                for index,item in enumerate(page_list):
-                    results = main_extraction(item)
-                    if results:
-                        all_json_data.extend(results)
-                        print(f"Added {len(results)} entries from page {index + 1}")
-                    else:
-                        print(f"Processed item {index + 1}: No entries found")
-
-                
-            except Exception as e:
-                print(f"Error in main processing: {str(e)}")
-
-            total_run_json_data.extend(all_json_data)
-        
-        if total_run_json_data:
-            # Convert to DataFrame
-            df = pd.DataFrame(total_run_json_data)
-
-            return df
-       
-    @task
-    def load_data(df):
-        parquet_buffer = io.BytesIO()
-        df.to_parquet(parquet_buffer, engine='pyarrow')
-        print("Data has been successfully scraped and saved to Parquet format")
-
-        try:
-            upload_to_datalake(parquet_buffer)
-        except Exception as e:
-            print(f"Error uploading to Data Lake: {str(e)}")
-            # Print full error traceback for debugging
-            import traceback
-            print(traceback.format_exc())
+            print(f"Error in main processing: {str(e)}")
 
         total_run_json_data.extend(all_json_data)
     
@@ -258,6 +171,19 @@ def load_data(data):
     # Execute the upload
     upload_to_adls.execute(context={})
 
+DAG_ID = "used_car_data_elt"
 
-# Allow the DAG to be run
-used_car_data_elt()
+with DAG(
+    DAG_ID,
+    start_date=pendulum.datetime(2025, 2, 18),
+    schedule="5 1 * * *",
+    catchup=False,
+    max_active_runs=1
+) as dag:
+    
+    # Define task dependencies
+    extracted_data = extract_data()
+    upload_task = load_data(extracted_data)
+    
+    # Set dependencies
+    extracted_data >> upload_task
