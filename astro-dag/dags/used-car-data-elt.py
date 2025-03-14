@@ -13,9 +13,10 @@ import re
 import os
 import io
 
-from dotenv import load_dotenv
-load_dotenv() # take environment variables from .env only for local testing
+load_dotenv()
 
+azure_connection_id = os.getenv("AZURE_CONNECTION_ID")
+azure_container_name = os.getenv("AZURE_CONTAINER_NAME")
 
 def page_number(start, end, base_url):
     list_page = []
