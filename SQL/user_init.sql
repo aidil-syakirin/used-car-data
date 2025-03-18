@@ -14,9 +14,9 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON SCHEMA::used_car_data TO used_car_data_r
 GRANT ALTER ON SCHEMA::used_car_data TO used_car_data_rw;
 
 -- grant the refrences and create table at database level
-GRANT REFERENCES ON SCHEMA::used_car_data TO your_user_or_role;
-GRANT CREATE TABLE TO your_user_or_role;
-
+GRANT REFERENCES ON SCHEMA::used_car_data TO used_car_data_rw;
+GRANT CREATE TABLE TO used_car_data_rw;
+REVOKE CREATE TABLE FROM used_car_data_rw;
 
 -- assign the role to the user
 ALTER ROLE used_car_data_rw ADD MEMBER spark_kirin;
