@@ -9,6 +9,15 @@ from azure.storage.blob import BlobServiceClient
 import io
 import os
 from sqlalchemy.engine import create_engine
+import msal
+import pyodbc
+import struct
+import socket
+from sqlalchemy import event
+from sqlalchemy.engine import URL
+import urllib.parse
+import threading
+from concurrent.futures import ThreadPoolExecutor, TimeoutError
 
 # Define default arguments
 default_args = {
@@ -125,47 +134,106 @@ with DAG(
         tenant_id = env_vars["AZURE_TENANT_ID"].strip()
         client_id = env_vars["AZSQL_CLIENT_ID"].strip()
         client_secret = env_vars["AZSQL_CLIENT_SECRET"].strip()
+
+        print("Getting MSAL token...")
+        # Get token
+        authority = f"https://login.microsoftonline.com/{tenant_id}"
+        app = msal.ConfidentialClientApplication(
+            client_id,
+            authority=authority,
+            client_credential=client_secret
+        )
         
-        # Import necessary modules
-        import urllib.parse
+        token_response = app.acquire_token_for_client(
+            scopes=["https://database.windows.net/.default"]
+        )
         
-        # Connection string using Service Principal authentication
-        connection_string = (
-            f"Driver={{ODBC Driver 18 for SQL Server}};"
-            f"Server={sql_server}.database.windows.net,1433;"
+        if "access_token" not in token_response:
+            raise Exception(f"Token acquisition failed: {token_response.get('error_description')}")
+
+        access_token = token_response["access_token"]
+        token_bytes = bytes(access_token, "utf-8")
+        ex_token = struct.pack(f"{len(token_bytes)}s", token_bytes)
+
+        # Create connection string
+        conn_str = (
+            "Driver={ODBC Driver 18 for SQL Server};"
+            f"Server=tcp:{sql_server}.database.windows.net,1433;"
             f"Database={db_name};"
             "Encrypt=yes;"
             "TrustServerCertificate=no;"
             "Connection Timeout=30;"
-            "Authentication=ActiveDirectoryServicePrincipal;"  # Use Service Principal auth
-            f"Tenant={tenant_id};"
-            f"ClientId={client_id};"
-            f"ClientSecret={client_secret};"
         )
+
+        print("Connecting to database...")
+        try:
+            # Use pyodbc for the connection
+            conn = pyodbc.connect(
+                conn_str,
+                attrs_before={1256: ex_token},
+                autocommit=True
+            )
+            
+            # Add these before the connection attempt
+            print(f"Connection string: {conn_str}")
+            print(f"Token length: {len(access_token)}")
+            print(f"Using SQL Server: {sql_server}")
+            print(f"Using Database: {db_name}")
+
+            # Test connection immediately after establishing it
+            cursor = conn.cursor()
+            cursor.execute("SELECT @@VERSION")
+            version = cursor.fetchone()
+            print(f"Connected successfully! SQL Version: {version[0]}")
+            
+            # Process data in chunks
+            chunk_size = 1000
+            for i in range(0, len(df), chunk_size):
+                chunk = df[i:i + chunk_size]
+                
+                # Convert chunk to list of tuples
+                columns = ','.join(df.columns)
+                placeholders = ','.join(['?' for _ in df.columns])
+                records = chunk.to_records(index=False)
+                
+                # Insert using pyodbc
+                cursor = conn.cursor()
+                cursor.fast_executemany = True
+                insert_sql = f"INSERT INTO test_staging ({columns}) VALUES ({placeholders})"
+                cursor.executemany(insert_sql, records)
+                conn.commit()
+                
+                print(f"Inserted chunk {i//chunk_size + 1}")
+                
+        except Exception as e:
+            print(f"Error: {str(e)}")
+            raise
+        finally:
+            if 'conn' in locals():
+                conn.close()
+
+    @task
+    def test_quick_connection(env_vars):
+        """Test connection with minimal timeout"""
+        sql_server = env_vars["SQL_SERVER"].strip()
+        server = f"{sql_server}.database.windows.net"
         
-        # URL-encode the connection string for SQLAlchemy
-        params = urllib.parse.quote_plus(connection_string)
-        
-        # Create the SQLAlchemy engine
-        engine = create_engine(f"mssql+pyodbc:///?odbc_connect={params}")
-        
-        # For debugging
-        print(f"SQL Server: {sql_server}")
-        print(f"Database: {db_name}")
-        print(f"Using Service Principal authentication with client ID: {client_id}")
-        
-        # Create the SQLAlchemy engine and connect
-        engine = create_engine(connection_string)
-        with engine.connect() as connection:
-            df.to_sql('test_staging', engine, if_exists='append', index=False)
-            connection.commit()
-        
-        return f"Successfully processed file {blob_name} and inserted {len(df)} rows"
-    
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(5)
+        try:
+            sock.connect((server, 1433))
+            return True
+        except Exception as e:
+            print(f"Connection failed: {e}")
+            return False
+        finally:
+            sock.close()
+
     # Define the task execution
     env_vars_task = get_env_vars()
+    quick_test = test_quick_connection(env_vars_task)
     blob_name_task = get_single_blob(env_vars_task)
     result_task = process_and_load(blob_name_task, env_vars_task)
     
     # Set the dependencies
-    env_vars_task >> blob_name_task >> result_task
+    env_vars_task >> quick_test >> blob_name_task >> result_task
