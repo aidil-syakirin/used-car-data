@@ -3,3 +3,4 @@ astronomer-cosmos
 apache-airflow-providers-microsoft-mssql
 apache-airflow-providers-odbc
 pyodbc
+msal
