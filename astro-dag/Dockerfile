@@ -5,6 +5,10 @@ RUN python -m venv dbt_venv && source dbt_venv/bin/activate && deactivate
 
 # Install ODBC driver for SQL Server
 USER root
+
+RUN apt-get update && apt-get install -y iputils-ping && \
+    apt-get update && apt-get install -y telnet
+
 RUN apt-get update && \
     apt-get install -y gnupg2 curl unixodbc unixodbc-dev && \
     curl https://packages.microsoft.com/keys/microsoft.asc | tee /etc/apt/trusted.gpg.d/microsoft.asc && \
@@ -16,5 +20,6 @@ RUN apt-get update && \
 
 # Install pyodbc in the main environment
 RUN pip install --no-cache-dir pyodbc
+
 
 USER astro
