@@ -10,14 +10,17 @@ The BS4 python file will scrap the source data from page 1 to 15 and convert it 
 | :---- | :---- | :---- |
 | listing\_id | varchar(20) |  |
 | car\_model | varchar(80) | (Myvi, City, Vios) |
+| title | varchar(max)|  |
 | price | varchar(80) | Price in RM |
+| variant | varchar(80) |  |
+| transmission | varchar(80) | |
 | installment | varchar(80) | Price in RM/month |
 | year | int | Manufacturing year |
 | mileage | varchar(80) |  |
 | color | varchar(80) |  |
 | location | varchar(80) |  |
 | state | varchar(80) |  |
-| url | varchar(80) | Web Page url |
+| url | varchar(max) | Web Page url |
 | image | nvarchar(max) | Array of image link |
 | extracted\_date | datetime |  |
 
@@ -29,7 +32,10 @@ The staging\_table data will be written using daily\_sink data. The daily\_sink 
 | :---- | :---- | :---- |
 | listing\_id | varchar(20) |  |
 | car\_model | varchar(80) | (Myvi, City, Vios) |
+| title | varchar(max)|  |
 | price | numeric(18,0) | Price in RM |
+| variant | varchar(80) |  |
+| transmission | varchar(80) | |
 | installment | numeric(18,0) | Price in RM/month |
 | year | int | Manufacturing year |
 | mileage | numeric(18,0) |  |
@@ -50,6 +56,8 @@ The staging\_table will undergo transformations and quality checks before being 
 | listing\_id | varchar(20) | Primary key  |
 | dim\_car\_model | varchar(20) | (Myvi, City, Vios) |
 | fct\_price | numeric(18,0) | Price in RM |
+| dim_variant | varchar(80) |  |
+| dim_transmission | varchar(80) | |
 | fct\_installment | numeric(18,0) | Price in RM/month |
 | fct\_year | int | Manufacturing year |
 | fct\_mileage | numeric(18,0) |  |
