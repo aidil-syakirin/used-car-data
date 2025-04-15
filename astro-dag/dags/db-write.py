@@ -7,17 +7,13 @@ import pandas as pd
 from azure.identity import ClientSecretCredential
 from azure.storage.blob import BlobServiceClient
 import io
-import os
 from sqlalchemy.engine import create_engine
-import msal
-import pyodbc
-import struct
 import socket
 from sqlalchemy import event
 from sqlalchemy.engine import URL
-import urllib.parse
-import threading
-from concurrent.futures import ThreadPoolExecutor, TimeoutError
+from sqlalchemy import text
+
+
 
 # Define default arguments
 default_args = {
@@ -53,7 +49,7 @@ with DAG(
             "SQL_SERVER": Variable.get("AZSQL_SQL_SERVER", default_var=""),
             "DB_NAME": Variable.get("AZSQL_SQL_DB", default_var=""),
             "DB_USERNAME": Variable.get("AZSQL_DB_USERNAME", default_var=""),
-            "DB_PASSWORD": Variable.get("AZQL_DB_PASSWORD", default_var=""),
+            "DB_PASSWORD": Variable.get("AZSQL_DB_PASSWORD", default_var=""),
             "AZSQL_CLIENT_ID": Variable.get("AZSQL_CLIENT_ID", default_var=""),
             "AZSQL_CLIENT_SECRET": Variable.get("AZSQL_CLIENT_SECRET", default_var="")
         }
@@ -117,100 +113,88 @@ with DAG(
         blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_name)
         stream = blob_client.download_blob().readall()
         
-        # Process data
+        # Preprocessing the scrapped data
         df = pd.read_parquet(io.BytesIO(stream))
-        df['listing_image'] = df['image'].str[0]
+        df['image'] = df['image'].str[0]
         df = df[df['state'].isnull() == False]
         df.rename(columns={'model': 'car_model'}, inplace=True)
         if 'seller' in df.columns:
             del df['seller']
-        df['processing_date'] = datetime.now()
-        
+           # --- Convert ALL columns to string type ---
+        print("Converting all DataFrame columns to string type...")
+        df = df.astype(str)
+        print("Conversion complete.")
+
+
+        df['extracted_date'] = datetime.now()
+        # --- Add detailed DataFrame inspection ---
+        print("DataFrame Info before insert:")
+        df.info(verbose=True, show_counts=True) # Show dtypes and non-null counts
+
+        print("DataFrame dtypes after potential conversions:")
+        print(df.dtypes)
+        # --- End of inspection and conversion ---
+
         # Get SQL credentials
         sql_server = env_vars["SQL_SERVER"].strip()
-        db_name = env_vars["DB_NAME"].strip() 
-        # username = env_vars["DB_USERNAME"].strip()
-        # password = env_vars["DB_PASSWORD"].strip()
+        db_name = env_vars["DB_NAME"].strip()
+        sql_username = env_vars["DB_USERNAME"].strip()
+        sql_password = env_vars["DB_PASSWORD"].strip()
         tenant_id = env_vars["AZURE_TENANT_ID"].strip()
         client_id = env_vars["AZSQL_CLIENT_ID"].strip()
         client_secret = env_vars["AZSQL_CLIENT_SECRET"].strip()
 
-        print("Getting MSAL token...")
-        # Get token
-        authority = f"https://login.microsoftonline.com/{tenant_id}"
-        app = msal.ConfidentialClientApplication(
-            client_id,
-            authority=authority,
-            client_credential=client_secret
-        )
-        
-        token_response = app.acquire_token_for_client(
-            scopes=["https://database.windows.net/.default"]
-        )
-        
-        if "access_token" not in token_response:
-            raise Exception(f"Token acquisition failed: {token_response.get('error_description')}")
+        def get_db_connection(db_user, db_password, db_server_name, db_database_name):
+            # Add detailed logging HERE
+            print("-" * 20)
+            print(f"Attempting get_db_connection with:")
+            print(f"  Username: {db_user}")
+            print(f"  Password: {'*' * len(db_password) if db_password else 'EMPTY!'}") # Mask password
+            print(f"  Server: {db_server_name}")
+            print(f"  Database: {db_database_name}")
+            print("-" * 20)
 
-        access_token = token_response["access_token"]
-        token_bytes = bytes(access_token, "utf-8")
-        ex_token = struct.pack(f"{len(token_bytes)}s", token_bytes)
+            if not db_user or not db_password:
+                 raise ValueError("Database username or password not provided to get_db_connection")
 
-        # Create connection string
-        conn_str = (
-            "Driver={ODBC Driver 18 for SQL Server};"
-            f"Server=tcp:{sql_server}.database.windows.net,1433;"
-            f"Database={db_name};"
-            "Encrypt=yes;"
-            "TrustServerCertificate=no;"
-            "Connection Timeout=30;"
-        )
-
-        print("Connecting to database...")
-        try:
-            # Use pyodbc for the connection
-            conn = pyodbc.connect(
-                conn_str,
-                attrs_before={1256: ex_token},
-                autocommit=True
+           # Connection string using SQL login
+            connection_string = (
+                f"mssql+pyodbc://{db_user}:{db_password}"
+                f"@{db_server_name}.database.windows.net:1433/{db_database_name}"
+                "?driver=ODBC+Driver+18+for+SQL+Server&encrypt=yes&TrustServerCertificate=no&timeout=30"
             )
-            
-            # Add these before the connection attempt
-            print(f"Connection string: {conn_str}")
-            print(f"Token length: {len(access_token)}")
-            print(f"Using SQL Server: {sql_server}")
-            print(f"Using Database: {db_name}")
 
-            # Test connection immediately after establishing it
-            cursor = conn.cursor()
-            cursor.execute("SELECT @@VERSION")
-            version = cursor.fetchone()
-            print(f"Connected successfully! SQL Version: {version[0]}")
-            
-            # Process data in chunks
-            chunk_size = 1000
-            for i in range(0, len(df), chunk_size):
-                chunk = df[i:i + chunk_size]
-                
-                # Convert chunk to list of tuples
-                columns = ','.join(df.columns)
-                placeholders = ','.join(['?' for _ in df.columns])
-                records = chunk.to_records(index=False)
-                
-                # Insert using pyodbc
-                cursor = conn.cursor()
-                cursor.fast_executemany = True
-                insert_sql = f"INSERT INTO test_staging ({columns}) VALUES ({placeholders})"
-                cursor.executemany(insert_sql, records)
-                conn.commit()
-                
-                print(f"Inserted chunk {i//chunk_size + 1}")
-                
-        except Exception as e:
-            print(f"Error: {str(e)}")
-            raise
-        finally:
-            if 'conn' in locals():
-                conn.close()
+            # Create the SQLAlchemy engine and connect
+            engine = create_engine(connection_string)
+            return engine
+
+        def insert_data(df_to_insert):
+            engine = get_db_connection(sql_username, sql_password, sql_server, db_name)
+            print(f"Target Server: {sql_server}, DB: {db_name}, Schema: used_car_data, Table: daily_sink") # Updated log
+
+            try:
+                with engine.connect() as connection:
+                    with connection.begin():
+                        df_to_insert.to_sql(
+                            name='daily_sink',          # Use only the table name here
+                            con=connection,             # 'con' is the conventional arg name
+                            schema='used_car_data',     # Specify the schema separately
+                            if_exists='append',
+                            index=False,
+                            method='multi',
+                            chunksize=1000
+                        )
+                    print("Data insertion successful.")
+            except Exception as e:
+                print(f"Error during data insertion: {e}")
+                import traceback
+                traceback.print_exc()
+                raise
+            finally:
+                 if engine:
+                     engine.dispose()
+
+        insert_data(df)
 
     @task
     def test_quick_connection(env_vars):
